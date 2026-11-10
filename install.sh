@@ -14,7 +14,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="bw-ssh-key"
-readonly SCRIPT_VERSION="2026.11.1"
+readonly SCRIPT_VERSION="2026.11.2"
 readonly ITEM_SUFFIX="-ssh-key"
 readonly DEFAULT_KEY_DIR="${HOME}/.ssh"
 readonly DEFAULT_KEY_FALLBACK="${DEFAULT_KEY_DIR}/id_ed25519"
@@ -554,9 +554,42 @@ authenticate() {
 	export BW_SESSION
 }
 
+relogin_vault() {
+	local email
+	email=$(bw status 2>/dev/null | jq -r '.userEmail // empty' 2>/dev/null) || email=""
+	[[ -n $email ]] && BW_EMAIL=${BW_EMAIL:-$email}
+
+	warn "Vault authentication is stale; logging in again."
+	bw logout >/dev/null 2>&1 || true
+	BW_SESSION=""
+	SESSION_ACQUIRED=0
+
+	login_vault
+	unlock_vault
+	export BW_SESSION
+}
+
 sync_vault() {
 	info "Syncing vault ..."
-	bw sync >/dev/null 2>&1 || warn "sync failed; continuing with cached vault data"
+	local out rc=0
+	out=$(bw sync 2>&1) || rc=$?
+	((rc == 0)) && return 0
+
+	case $out in
+	*"not logged in"* | *"401"* | *"Unauthorized"* | *"Invalid session"* | *"Vault is locked"*)
+		relogin_vault
+		if ! bw sync >/dev/null 2>&1; then
+			die "sync failed after logging in again"
+		fi
+		;;
+	*)
+		warn "sync failed; continuing with cached vault data"
+		;;
+	esac
+}
+
+encode_json() { # json
+	printf '%s' "$1" | bw encode
 }
 
 # ---------------------------------------------------------------------------
@@ -667,7 +700,9 @@ create_key_item_from_local() { # name
 		--arg fingerprint "$fingerprint" \
 		'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), keyFingerprint: $fingerprint}}')
 
-	if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
+	local encoded
+	encoded=$(encode_json "$json") || die "failed to encode vault item '$name'"
+	if ! printf '%s' "$encoded" | bw create item >/dev/null; then
 		err "Hint: Vaultwarden needs EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent"
 		die "failed to create vault item '$name'"
 	fi
@@ -708,7 +743,9 @@ push_local_key() { # item
 		 | .sshKey.publicKey = ($public | rtrimstr("\n"))
 		 | .sshKey.keyFingerprint = $fingerprint' <<<"$item_json")
 
-	if ! printf '%s' "$updated" | bw encode | bw edit item "$id" >/dev/null; then
+	local encoded
+	encoded=$(encode_json "$updated") || die "failed to encode vault item '$name'"
+	if ! printf '%s' "$encoded" | bw edit item "$id" >/dev/null; then
 		die "failed to update vault item '$name'"
 	fi
 
@@ -816,7 +853,9 @@ create_key_item() { # name
 			--rawfile public "$keyfile.pub" \
 			--arg fingerprint "$fingerprint" \
 			'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), keyFingerprint: $fingerprint}}')
-		if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
+		local encoded
+		encoded=$(encode_json "$json") || die "failed to encode vault item '$name'"
+		if ! printf '%s' "$encoded" | bw create item >/dev/null; then
 			err "Hint: Vaultwarden needs EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent"
 			die "failed to create vault item '$name'"
 		fi

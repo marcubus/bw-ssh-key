@@ -78,9 +78,21 @@ case ${1:-} in
 	;;
 status)
 	jq -n --arg status "${BW_STATUS:-unlocked}" --arg server "${BW_SERVER_URL:-}" \
-		'{status: $status, serverUrl: $server}'
+		--arg email "${BW_EMAIL:-test@example}" \
+		'{status: $status, serverUrl: $server, userEmail: $email}'
 	;;
-sync | logout | lock)
+sync)
+	if [[ -n ${BW_SYNC_FAIL:-} ]]; then
+		if [[ -n ${BW_SYNC_FAIL_ONCE:-} && -e ${BW_SYNC_FAIL_MARKER:-/nonexistent} ]]; then
+			:
+		else
+			[[ -n ${BW_SYNC_FAIL_ONCE:-} ]] && : >"${BW_SYNC_FAIL_MARKER}"
+			printf '%s\n' "${BW_SYNC_FAIL}" >&2
+			exit 1
+		fi
+	fi
+	;;
+logout | lock)
 	;;
 config)
 	[[ ${2:-} == server ]]

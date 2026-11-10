@@ -208,6 +208,19 @@ setup() {
 	bw_log_not_contains "bw lock"
 }
 
+@test "a stale login triggers a fresh login" {
+	export BW_STATUS=locked
+	export BW_PASSWORD=secret
+	export BW_SYNC_FAIL="You are not logged in."
+	export BW_SYNC_FAIL_ONCE=1
+	export BW_SYNC_FAIL_MARKER="${BATS_TEST_TMPDIR}/sync-failed"
+
+	run "${INSTALL_SH}" --list --server https://vault.example
+	[ "$status" -eq 0 ]
+	bw_log_contains "bw logout"
+	bw_log_contains "bw login --passwordenv BW_PASSWORD"
+}
+
 @test "the vault is locked on exit by default" {
 	export BW_STATUS=locked
 	export BW_PASSWORD=secret

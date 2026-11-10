@@ -5,6 +5,16 @@ All notable changes to `bw-ssh-key` are recorded here.
 Versions use CalVer in the form `YYYY.MM.MICRO`. `MICRO` starts at `0` each
 month and increments per release; tags are prefixed with `v`.
 
+## [2026.11.2] - 2026-11-11
+
+### Fixed
+
+- A stale CLI login (account present, access token missing) now triggers a
+  fresh `bw logout`/`bw login`/`bw unlock` instead of failing later with
+  `You are not logged in.`
+- JSON is base64-encoded before it is piped to `bw create`/`bw edit`, avoiding
+  the Node `EPIPE` stack trace when the vault command exits early.
+
 ## [2026.11.1] - 2026-11-11
 
 ### Fixed
