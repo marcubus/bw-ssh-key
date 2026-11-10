@@ -47,6 +47,10 @@ month and increments per release; tags are prefixed with `v`.
 
 ### Fixed
 
+- `--check` now reports missing tools with exit code `2` instead of exiting
+  silently with code `1`.
+- `--install-deps` now continues after installing dependencies instead of
+  exiting with code `1`.
 - `bw unlock` and `bw login` now read the password through `--passwordenv`,
   which the current CLI requires for non-interactive use.
 - Creating an item now hints at the Vaultwarden `ssh-key-vault-item` feature flag

@@ -229,8 +229,12 @@ preflight() {
 	collect_dep hostname "system package: coreutils"
 	collect_dep mktemp "system package: coreutils"
 
-	command -v jq >/dev/null 2>&1 && check_jq_version
-	command -v bw >/dev/null 2>&1 && check_bw_version
+	if command -v jq >/dev/null 2>&1; then
+		check_jq_version
+	fi
+	if command -v bw >/dev/null 2>&1; then
+		check_bw_version
+	fi
 }
 
 report_missing() {
@@ -987,7 +991,9 @@ main() {
 		if ((INSTALL_DEPS)); then
 			install_deps
 		fi
-		((${#MISSING[@]})) && report_missing
+		if ((${#MISSING[@]})); then
+			report_missing
+		fi
 	fi
 
 	if ((CHECK_ONLY)); then
