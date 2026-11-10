@@ -387,9 +387,9 @@ login_vault() {
 	info "Logging in as $email ..."
 	local rc=0
 	if ((TTY_OPEN)); then
-		BW_PASSWORD="$VAULT_PASSWORD" bw login "$email" <&3 || rc=$?
+		BW_PASSWORD="$VAULT_PASSWORD" bw login --passwordenv BW_PASSWORD "$email" <&3 || rc=$?
 	else
-		BW_PASSWORD="$VAULT_PASSWORD" bw login "$email" || rc=$?
+		BW_PASSWORD="$VAULT_PASSWORD" bw login --passwordenv BW_PASSWORD "$email" || rc=$?
 	fi
 
 	((rc == 0)) || die "login failed"
@@ -405,7 +405,7 @@ unlock_vault() {
 
 	info "Unlocking vault ..."
 	local session rc=0
-	session=$(BW_PASSWORD="$VAULT_PASSWORD" bw unlock --raw) || rc=$?
+	session=$(BW_PASSWORD="$VAULT_PASSWORD" bw unlock --passwordenv BW_PASSWORD --raw) || rc=$?
 
 	((rc == 0)) && [[ -n $session ]] || die "unlock failed"
 	BW_SESSION=$session
