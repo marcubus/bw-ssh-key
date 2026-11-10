@@ -3,6 +3,7 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -32,5 +33,25 @@ jobs:
           set -e
           if [[ $rc -ne 0 && $rc -ne 2 ]]; then
             echo "unexpected --check exit code: $rc" >&2
+            exit 1
+          fi
+
+  tag-check:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches SCRIPT_VERSION
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(sed -n 's/^readonly SCRIPT_VERSION="\(.*\)"$/\1/p' install.sh)
+          echo "tag=$tag script_version=$version"
+          if [[ -z $version ]]; then
+            echo "could not read SCRIPT_VERSION from install.sh" >&2
+            exit 1
+          fi
+          if [[ $tag != "$version" ]]; then
+            echo "tag and SCRIPT_VERSION differ" >&2
             exit 1
           fi

@@ -14,7 +14,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="bw-ssh-key"
-readonly SCRIPT_VERSION="0.1.0"
+readonly SCRIPT_VERSION="2026.11.0"
 readonly ITEM_SUFFIX="-ssh-key"
 readonly DEFAULT_KEY_PATH="${HOME}/.ssh/id_ed25519"
 

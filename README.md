@@ -143,11 +143,10 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
   locked on exit.
 - TLS verification is left on. There is no `--insecure` option.
 
-`curl | bash` runs whatever `main` points at. To reduce that risk, pin a commit
-or tag:
+`curl | bash` runs whatever `main` points at. To reduce that risk, pin a tag:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/<commit>/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/v2026.11.0/install.sh)
 ```
 
 See [SECURITY.md](SECURITY.md) for reporting issues.
@@ -167,6 +166,18 @@ or open a new shell.
 **2FA fails on login**: the login step runs interactively on `/dev/tty`, so run
 it from a terminal. For unattended use, set `BW_2FA_CODE` (and optionally
 `BW_2FA_METHOD`, default `0` for an authenticator app).
+
+## Versioning
+
+Releases use CalVer in the form `YYYY.MM.MICRO`, for example `2026.11.0`.
+
+- `MICRO` starts at `0` each month and increments for every release.
+- The month rollover resets it: `2026.12.0` follows `2026.11.4`.
+- Git tags are the version with a `v` prefix, such as `v2026.11.0`.
+- `install.sh --version` prints the same version without the prefix.
+
+Pin a tag for a reproducible install. See [CHANGELOG.md](CHANGELOG.md) for the
+release notes.
 
 ## Development
 
