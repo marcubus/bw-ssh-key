@@ -13,16 +13,17 @@ The script derives the vault item name from the machine:
 <hostname -s>-ssh-key      # workstation → workstation-ssh-key
 ```
 
-If that item does not exist, it lists every `*-ssh-key` item in the vault
-and asks which one to use. It never guesses and never writes a key it did not
-fetch.
+If that item does not exist, the script generates a new ed25519 key for the host,
+creates the item in the vault, and installs it. With `--no-create` it instead
+lists every `*-ssh-key` item and asks which one to use.
 
 ## What it does
 
 1. Checks dependencies (`bash`, `curl`, `jq`, `bw`, `ssh-keygen`).
 2. Asks which vault to use: `bitwarden.com` or a self-hosted Vaultwarden URL.
 3. Logs in (email, master password, 2FA) or unlocks an existing session.
-4. Syncs the vault and reads the item's SSH private key.
+4. Syncs the vault and reads the item's SSH private key, or generates a new key
+   and creates the item if it is missing.
 5. Backs up any existing key and installs the new one with mode `600`.
 6. Regenerates the `.pub` file, validates the key with `ssh-keygen`, and prints
    the fingerprint and public key.
@@ -92,8 +93,9 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
 | `--server URL` | Vault endpoint; skips the interactive prompt |
 | `--list` | List available `*-ssh-key` items and exit |
 | `--force` | Overwrite without confirmation (a timestamped backup is still made) |
+| `--no-create` | Do not create a vault item when the key is missing |
 | `--no-lock` | Leave the vault unlocked when the script exits |
-| `--dry-run` | Fetch and validate the key, but do not install it |
+| `--dry-run` | Fetch or generate and validate the key, but do not create or install it |
 | `--check` | Check dependencies only |
 | `--install-deps` | Install missing dependencies with mise where possible |
 | `-h`, `--help` | Show help |
@@ -105,6 +107,8 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
 |---|---|
 | `BW_EMAIL` | Skip the email prompt |
 | `BW_PASSWORD` | Skip the master-password prompt |
+| `BW_2FA_CODE` | Two-step login code; enables non-interactive 2FA |
+| `BW_2FA_METHOD` | Two-step method number (default `0`, authenticator) |
 | `VAULT_KEY_ITEM` | Exact item name, same as `--item` |
 
 ### Item resolution order
@@ -127,8 +131,14 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
 - The repo contains no secrets, vault IDs, or host-specific data.
 - The private key is written with `umask 077`, mode `600`, via a temp file in the
   same directory and an atomic `mv`.
+- Generated keys are staged in a `700` directory under `~/.ssh`, removed as soon
+  as the vault item is created, and never written to `/tmp`.
+- Key material is piped to `bw` over stdin, never passed as a command-line
+  argument.
 - The master password is never passed on the command line; it is passed to `bw`
   through the environment and cleared on exit.
+- A 2FA code supplied via `BW_2FA_CODE` is passed with `--code`, so it is briefly
+  visible in the process list. Prefer the interactive prompt on shared machines.
 - `BW_SESSION` is exported only for the lifetime of the script, and the vault is
   locked on exit.
 - TLS verification is left on. There is no `--insecure` option.
@@ -154,8 +164,9 @@ vault contains. The script warns when the hostname looks generic (`localhost`,
 **Old key still used by the agent**: `ssh-add -D && ssh-add ~/.ssh/id_ed25519`,
 or open a new shell.
 
-**2FA fails on login**: the login step runs interactively on `/dev/tty`; make
-sure you are running it from a terminal, not from a non-interactive job.
+**2FA fails on login**: the login step runs interactively on `/dev/tty`, so run
+it from a terminal. For unattended use, set `BW_2FA_CODE` (and optionally
+`BW_2FA_METHOD`, default `0` for an authenticator app).
 
 ## Development
 

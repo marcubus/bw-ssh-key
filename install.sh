@@ -64,8 +64,9 @@ Options:
   --server URL      Vault endpoint (skips the interactive prompt)
   --list            List available *${ITEM_SUFFIX} items and exit
   --force           Overwrite without confirmation (a backup is still made)
+  --no-create       Do not create a vault item when the key is missing
   --no-lock         Leave the vault unlocked when the script exits
-  --dry-run         Fetch and validate the key, but do not install it
+  --dry-run         Fetch or generate and validate the key, but do not create or install it
   --check           Check dependencies only, then exit
   --install-deps    Install missing dependencies with mise where possible
   -h, --help        Show this help
@@ -74,10 +75,15 @@ Options:
 Environment:
   BW_EMAIL          Bitwarden email (skips the email prompt)
   BW_PASSWORD       Master password (skips the password prompt)
+  BW_2FA_CODE       Two-step login code (enables non-interactive 2FA)
+  BW_2FA_METHOD     Two-step method number (default: 0, authenticator)
   VAULT_KEY_ITEM    Exact vault item name (same as --item)
 
 Item resolution order:
   --item  >  --host  >  VAULT_KEY_ITEM  >  <hostname -s>${ITEM_SUFFIX}
+
+If the item is missing, a new ed25519 key is generated for this host and stored
+in the vault as an SSH key item. Use --no-create to pick an existing item instead.
 
 Exit codes:
   0 success   1 failure   2 missing dependency   3 item not found
@@ -208,6 +214,7 @@ KEY_PATH=$DEFAULT_KEY_PATH
 SERVER_URL=""
 LIST_ONLY=0
 FORCE=0
+CREATE=1
 LOCK_AFTER=1
 DRY_RUN=0
 CHECK_ONLY=0
@@ -238,6 +245,10 @@ parse_args() {
 			;;
 		--force)
 			FORCE=1
+			shift
+			;;
+		--no-create)
+			CREATE=0
 			shift
 			;;
 		--no-lock)
@@ -384,12 +395,18 @@ login_vault() {
 		VAULT_PASSWORD=$(prompt_secret "Master password") || die "aborted"
 	fi
 
+	local -a login_cmd=(bw login --passwordenv BW_PASSWORD)
+	if [[ -n ${BW_2FA_CODE:-} ]]; then
+		login_cmd+=(--method "${BW_2FA_METHOD:-0}" --code "$BW_2FA_CODE")
+	fi
+	login_cmd+=("$email")
+
 	info "Logging in as $email ..."
 	local rc=0
 	if ((TTY_OPEN)); then
-		BW_PASSWORD="$VAULT_PASSWORD" bw login --passwordenv BW_PASSWORD "$email" <&3 || rc=$?
+		BW_PASSWORD="$VAULT_PASSWORD" "${login_cmd[@]}" <&3 || rc=$?
 	else
-		BW_PASSWORD="$VAULT_PASSWORD" bw login --passwordenv BW_PASSWORD "$email" || rc=$?
+		BW_PASSWORD="$VAULT_PASSWORD" "${login_cmd[@]}" || rc=$?
 	fi
 
 	((rc == 0)) || die "login failed"
@@ -490,12 +507,63 @@ list_ssh_items() {
 		sort -u
 }
 
+item_exists() { # name
+	bw get item "$1" >/dev/null 2>&1
+}
+
+create_key_item() { # name
+	local name=$1
+	local dir keyfile private fingerprint json
+
+	mkdir -p "${HOME}/.ssh"
+	chmod 700 "${HOME}/.ssh" 2>/dev/null || true
+	dir=$(mktemp -d "${HOME}/.ssh/.bw-ssh-key.XXXXXX")
+	chmod 700 "$dir"
+	TMP_DIR=$dir
+	keyfile="${dir}/key"
+
+	(umask 077 && ssh-keygen -t ed25519 -N "" -C "$(id -un)@$(hostname -s)" -f "$keyfile" >/dev/null)
+
+	private=$(cat "$keyfile")
+	fingerprint=$(ssh-keygen -lf "$keyfile" | awk '{print $2}')
+
+	if ((DRY_RUN)); then
+		info "[dry-run] would create vault item '$name' (${fingerprint})"
+	else
+		json=$(jq -n \
+			--arg name "$name" \
+			--rawfile private "$keyfile" \
+			--rawfile public "$keyfile.pub" \
+			--arg fingerprint "$fingerprint" \
+			'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), fingerprint: $fingerprint}}')
+		if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
+			die "failed to create vault item '$name'"
+		fi
+		info "Created vault item '$name'"
+	fi
+
+	KEY=$private
+	ITEM=$name
+
+	rm -rf "$dir"
+	TMP_DIR=""
+	return 0
+}
+
 find_item() {
 	if fetch_item "$ITEM"; then
 		return 0
 	fi
 
-	warn "No vault item named '$ITEM'."
+	if item_exists "$ITEM"; then
+		warn "Vault item '$ITEM' exists but has no usable private key."
+	elif ((CREATE)); then
+		info "No vault item named '$ITEM'; generating a new key for this host."
+		create_key_item "$ITEM"
+		return 0
+	else
+		warn "No vault item named '$ITEM'."
+	fi
 
 	local -a names=()
 	mapfile -t names < <(list_ssh_items)
@@ -560,6 +628,7 @@ find_item() {
 # ---------------------------------------------------------------------------
 
 TMP_KEY=""
+TMP_DIR=""
 
 install_key() { # key path
 	local key=$1 path=$2
@@ -625,6 +694,9 @@ cleanup() {
 
 	if [[ -n ${TMP_KEY:-} && -f ${TMP_KEY:-} ]]; then
 		rm -f "$TMP_KEY"
+	fi
+	if [[ -n ${TMP_DIR:-} && -d ${TMP_DIR:-} ]]; then
+		rm -rf "$TMP_DIR"
 	fi
 
 	if [[ -n ${BW_SESSION:-} ]]; then
