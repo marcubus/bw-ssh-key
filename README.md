@@ -144,17 +144,17 @@ See [SECURITY.md](SECURITY.md) for reporting issues.
 
 ## Troubleshooting
 
-**`bw` is missing** — run with `--install-deps`, or install it with
+**`bw` is missing**: run with `--install-deps`, or install it with
 `mise use -g bitwarden@latest`.
 
-**Wrong item name** — pass `--host` or `--item`, or run `--list` to see what the
+**Wrong item name**: pass `--host` or `--item`, or run `--list` to see what the
 vault contains. The script warns when the hostname looks generic (`localhost`,
 `ubuntu`, container IDs).
 
-**Old key still used by the agent** — `ssh-add -D && ssh-add ~/.ssh/id_ed25519`,
+**Old key still used by the agent**: `ssh-add -D && ssh-add ~/.ssh/id_ed25519`,
 or open a new shell.
 
-**2FA fails on login** — the login step runs interactively on `/dev/tty`; make
+**2FA fails on login**: the login step runs interactively on `/dev/tty`; make
 sure you are running it from a terminal, not from a non-interactive job.
 
 ## Development
@@ -169,4 +169,4 @@ CI runs the same checks on every push and pull request.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

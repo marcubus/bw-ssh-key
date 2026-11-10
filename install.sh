@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# bw-ssh-key — fetch a per-host private SSH key from Bitwarden/Vaultwarden
+# bw-ssh-key: fetch a per-host private SSH key from Bitwarden/Vaultwarden
 # and install it at ~/.ssh/id_ed25519.
 #
 # Usage:
@@ -52,7 +52,7 @@ die() {
 
 usage() {
 	cat <<EOF
-${C_BOLD}${SCRIPT_NAME} ${SCRIPT_VERSION}${C_RESET} — install this host's SSH key from Bitwarden/Vaultwarden
+${C_BOLD}${SCRIPT_NAME} ${SCRIPT_VERSION}${C_RESET}: install this host's SSH key from Bitwarden/Vaultwarden
 
 Usage:
   bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh) [options]
