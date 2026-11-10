@@ -14,7 +14,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="bw-ssh-key"
-readonly SCRIPT_VERSION="2026.11.0"
+readonly SCRIPT_VERSION="2026.11.1"
 readonly ITEM_SUFFIX="-ssh-key"
 readonly DEFAULT_KEY_DIR="${HOME}/.ssh"
 readonly DEFAULT_KEY_FALLBACK="${DEFAULT_KEY_DIR}/id_ed25519"
@@ -621,6 +621,13 @@ fingerprint_of_pub() { # public key line
 	ssh-keygen -lf <(printf '%s\n' "$1") 2>/dev/null | awk '{print $2}'
 }
 
+ssh_fingerprint() { # private or public key file
+	local fp
+	fp=$(ssh-keygen -lf "$1" 2>/dev/null | awk '{print $2}')
+	[[ -n $fp ]] || fp=$(ssh-keygen -lf "$1.pub" 2>/dev/null | awk '{print $2}')
+	printf '%s' "$fp"
+}
+
 derive_pub_from_private() { # private key string
 	local dir keyfile pub
 	dir=$(mktemp -d "${HOME}/.ssh/.bw-ssh-key.XXXXXX")
@@ -650,7 +657,8 @@ create_key_item_from_local() { # name
 	fi
 
 	private=$(cat "$KEY_PATH")
-	fingerprint=$(ssh-keygen -lf "$pubfile" | awk '{print $2}')
+	fingerprint=$(ssh_fingerprint "$pubfile")
+	[[ -n $fingerprint ]] || die "cannot compute SSH fingerprint for $KEY_PATH"
 
 	json=$(jq -n \
 		--arg name "$name" \
@@ -689,7 +697,8 @@ push_local_key() { # item
 	if ! ssh-keygen -y -f "$KEY_PATH" >"$pubfile" 2>/dev/null; then
 		die "cannot read local key $KEY_PATH (passphrase-protected?)"
 	fi
-	fingerprint=$(ssh-keygen -lf "$pubfile" | awk '{print $2}')
+	fingerprint=$(ssh_fingerprint "$pubfile")
+	[[ -n $fingerprint ]] || die "cannot compute SSH fingerprint for $KEY_PATH"
 
 	updated=$(jq \
 		--rawfile private "$KEY_PATH" \
@@ -795,7 +804,8 @@ create_key_item() { # name
 	(umask 077 && ssh-keygen -t ed25519 -N "" -C "$(id -un)@$(hostname -s)" -f "$keyfile" >/dev/null)
 
 	private=$(cat "$keyfile")
-	fingerprint=$(ssh-keygen -lf "$keyfile" | awk '{print $2}')
+	fingerprint=$(ssh_fingerprint "$keyfile")
+	[[ -n $fingerprint ]] || die "cannot compute SSH fingerprint for the generated key"
 
 	if ((DRY_RUN)); then
 		info "[dry-run] would create vault item '$name' (${fingerprint})"

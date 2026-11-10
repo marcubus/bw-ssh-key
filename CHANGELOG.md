@@ -5,6 +5,15 @@ All notable changes to `bw-ssh-key` are recorded here.
 Versions use CalVer in the form `YYYY.MM.MICRO`. `MICRO` starts at `0` each
 month and increments per release; tags are prefixed with `v`.
 
+## [2026.11.1] - 2026-11-11
+
+### Fixed
+
+- SSH fingerprints are now computed with a fallback to the private key, and the
+  script fails early with a clear message if no fingerprint can be derived.
+  Previously an empty fingerprint produced the misleading Bitwarden CLI error
+  `SSH key fingerprint is required.`
+
 ## [2026.11.0] - 2026-11-10
 
 ### Added
