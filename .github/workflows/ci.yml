@@ -20,6 +20,9 @@ jobs:
       - name: Format and lint
         run: mise run check
 
+      - name: Tests
+        run: mise run test
+
       - name: Help and version
         run: |
           ./install.sh --help >/dev/null

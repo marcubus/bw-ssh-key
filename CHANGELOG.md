@@ -30,6 +30,8 @@ month and increments per release; tags are prefixed with `v`.
 - Main and release-tag rulesets, with a direct-push exemption for the
   maintainer.
 - SHA-pinned GitHub Actions and Dependabot security updates.
+- Bats tests for CLI flags, dependency checks, item resolution, key
+  reconciliation, dry runs, locking, and 2FA arguments.
 
 ### Changed
 
@@ -51,6 +53,11 @@ month and increments per release; tags are prefixed with `v`.
   silently with code `1`.
 - `--install-deps` now continues after installing dependencies instead of
   exiting with code `1`.
+- Missing-value errors for `--host`, `--item`, `--path`, `--server`, and
+  `--on-mismatch` now use clean messages.
+- `--dry-run` no longer uploads an existing local key when the vault item is
+  missing.
+- `--server` now strips a trailing slash before configuring the endpoint.
 - `bw unlock` and `bw login` now read the password through `--passwordenv`,
   which the current CLI requires for non-interactive use.
 - Creating an item now hints at the Vaultwarden `ssh-key-vault-item` feature flag

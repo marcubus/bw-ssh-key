@@ -293,23 +293,31 @@ DRY_RUN=0
 CHECK_ONLY=0
 INSTALL_DEPS=0
 
+need_value() { # flag value
+	[[ -n ${2:-} ]] || die "$1 requires a value"
+}
+
 parse_args() {
 	while (($#)); do
 		case $1 in
 		--host)
-			HOST_OVERRIDE=${2:?--host requires a value}
+			need_value "$1" "${2:-}"
+			HOST_OVERRIDE=$2
 			shift 2
 			;;
 		--item)
-			ITEM_OVERRIDE=${2:?--item requires a value}
+			need_value "$1" "${2:-}"
+			ITEM_OVERRIDE=$2
 			shift 2
 			;;
 		--path)
-			KEY_PATH=${2:?--path requires a value}
+			need_value "$1" "${2:-}"
+			KEY_PATH=$2
 			shift 2
 			;;
 		--server)
-			SERVER_URL=${2:?--server requires a value}
+			need_value "$1" "${2:-}"
+			SERVER_URL=$2
 			shift 2
 			;;
 		--list)
@@ -325,7 +333,8 @@ parse_args() {
 			shift
 			;;
 		--on-mismatch)
-			ON_MISMATCH=${2:?--on-mismatch requires a value}
+			need_value "$1" "${2:-}"
+			ON_MISMATCH=$2
 			case ${ON_MISMATCH,,} in
 			pull | p | push | u | upload | skip | s) ;;
 			*) die "invalid --on-mismatch value: $ON_MISMATCH" ;;
@@ -419,7 +428,10 @@ resolve_item() {
 # ---------------------------------------------------------------------------
 
 choose_server() {
-	[[ -n $SERVER_URL ]] && return 0
+	if [[ -n $SERVER_URL ]]; then
+		SERVER_URL=${SERVER_URL%/}
+		return 0
+	fi
 
 	local choice
 	choice=$(prompt "Vault endpoint: 1) bitwarden.com  2) self-hosted Vaultwarden (enter URL)" "1") || die "aborted"
@@ -818,6 +830,10 @@ find_item() {
 		warn "Vault item '$ITEM' exists but has no usable private key."
 	elif ((CREATE)); then
 		if ((RECONCILE)) && is_default_key_path "$KEY_PATH" && [[ -f $KEY_PATH ]]; then
+			if ((DRY_RUN)); then
+				info "[dry-run] would create vault item '$ITEM' from the local key."
+				exit "$EX_OK"
+			fi
 			info "No vault item named '$ITEM'; uploading the existing local key."
 			create_key_item_from_local "$ITEM"
 			return 0

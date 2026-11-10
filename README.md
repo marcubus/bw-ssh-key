@@ -248,6 +248,7 @@ release notes.
 ```bash
 mise install
 mise run check     # shfmt -d + shellcheck
+mise run test      # bats
 mise run fmt       # shfmt -w
 mise lock --bump   # refresh mise.lock after changing .mise.toml
 ```

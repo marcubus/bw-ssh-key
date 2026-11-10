@@ -2,6 +2,7 @@
 jq = "1.8"
 shellcheck = "0.11"
 shfmt = "3.14"
+bats = "1.14"
 bitwarden = "2026.10"
 
 [tasks.lint]
@@ -9,12 +10,16 @@ description = "Run shellcheck"
 run = "shellcheck -x install.sh"
 
 [tasks.fmt]
-description = "Format install.sh"
-run = "shfmt -w install.sh"
+description = "Format shell and bats files"
+run = "shfmt -w install.sh tests/*.bats tests/test_helper.bash"
 
 [tasks.check]
 description = "Verify formatting and lint"
 run = [
-  "shfmt -d install.sh",
-  "shellcheck -x install.sh",
+  "shfmt -d install.sh tests/*.bats tests/test_helper.bash",
+  "shellcheck -x install.sh tests/test_helper.bash tests/*.bats",
 ]
+
+[tasks.test]
+description = "Run bats tests"
+run = "bats tests"
