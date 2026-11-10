@@ -10,10 +10,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/ins
 The script derives the vault item name from the machine:
 
 ```
-<hostname -s>-ssh-key-private      # maaate → maaate-ssh-key-private
+<hostname -s>-ssh-key      # maaate → maaate-ssh-key
 ```
 
-If that item does not exist, it lists every `*-ssh-key-private` item in the vault
+If that item does not exist, it lists every `*-ssh-key` item in the vault
 and asks which one to use. It never guesses and never writes a key it did not
 fetch.
 
@@ -46,7 +46,7 @@ This repo pins the same tools in `.mise.toml`; run `mise install` after cloning.
 ## Vault item format
 
 Create an item in Bitwarden/Vaultwarden of type **SSH key**, named
-`<hostname>-ssh-key-private`, and paste the private key into its *Private key*
+`<hostname>-ssh-key`, and paste the private key into its *Private key*
 field. The script reads `.sshKey.privateKey`.
 
 For compatibility it also accepts:
@@ -90,7 +90,7 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
 | `--item NAME` | Use an exact vault item name |
 | `--path PATH` | Install the private key at `PATH` (default `~/.ssh/id_ed25519`) |
 | `--server URL` | Vault endpoint; skips the interactive prompt |
-| `--list` | List available `*-ssh-key-private` items and exit |
+| `--list` | List available `*-ssh-key` items and exit |
 | `--force` | Overwrite without confirmation (a timestamped backup is still made) |
 | `--no-lock` | Leave the vault unlocked when the script exits |
 | `--dry-run` | Fetch and validate the key, but do not install it |
@@ -110,7 +110,7 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
 ### Item resolution order
 
 ```
---item  >  --host  >  VAULT_KEY_ITEM  >  <hostname -s>-ssh-key-private
+--item  >  --host  >  VAULT_KEY_ITEM  >  <hostname -s>-ssh-key
 ```
 
 ### Exit codes

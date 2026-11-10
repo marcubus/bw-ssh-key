@@ -7,7 +7,7 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh)
 #
 # The vault item name is derived from the machine:
-#   <hostname -s>-ssh-key-private      e.g. maaate-ssh-key-private
+#   <hostname -s>-ssh-key      e.g. maaate-ssh-key
 #
 # See --help for flags.
 
@@ -15,7 +15,7 @@ set -euo pipefail
 
 readonly SCRIPT_NAME="bw-ssh-key"
 readonly SCRIPT_VERSION="0.1.0"
-readonly ITEM_SUFFIX="-ssh-key-private"
+readonly ITEM_SUFFIX="-ssh-key"
 readonly DEFAULT_KEY_PATH="${HOME}/.ssh/id_ed25519"
 
 readonly EX_OK=0
