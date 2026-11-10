@@ -1,7 +1,7 @@
 # bw-ssh-key
 
 Fetch this host's private SSH key from Bitwarden or Vaultwarden and install it at
-`~/.ssh/id_ed25519`, in one command.
+the OpenSSH default identity, in one command.
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh)
@@ -22,12 +22,15 @@ lists every `*-ssh-key` item and asks which one to use.
 1. Checks dependencies (`bash`, `curl`, `jq`, `bw`, `ssh-keygen`).
 2. Asks which vault to use: `bitwarden.com` or a self-hosted Vaultwarden URL.
 3. Logs in (email, master password, 2FA) or unlocks an existing session.
-4. Syncs the vault and reads the item's SSH private key, or generates a new key
-   and creates the item if it is missing.
-5. Backs up any existing key and installs the new one with mode `600`.
-6. Regenerates the `.pub` file, validates the key with `ssh-keygen`, and prints
+4. Syncs the vault and reads the item's SSH private key, or creates the item if
+   it is missing.
+5. If a default local key exists, compares it with the vault item and offers to
+   pull the vault key, push the local key, or skip.
+6. Backs up any existing key and installs the vault key with mode `600`, unless
+   the local and vault keys already match.
+7. Regenerates the `.pub` file, validates the key with `ssh-keygen`, and prints
    the fingerprint and public key.
-7. Locks the vault on exit unless `--no-lock` was passed.
+8. Locks the vault on exit unless `--no-lock` was passed.
 
 ## Requirements
 
@@ -74,6 +77,44 @@ For compatibility it also accepts:
 The key must be unencrypted (no passphrase); `ssh-keygen -y` is used to validate
 it without prompting.
 
+## Existing local keys
+
+When no `--path` is given, the target is the first existing OpenSSH default
+identity in this order:
+
+```
+~/.ssh/id_rsa
+~/.ssh/id_ecdsa
+~/.ssh/id_ecdsa_sk
+~/.ssh/id_ed25519
+~/.ssh/id_ed25519_sk
+~/.ssh/id_dsa
+```
+
+If none exist, `~/.ssh/id_ed25519` is used. The key type does not matter; RSA,
+ECDSA, and Ed25519 keys are all handled.
+
+Reconciliation only applies to those default paths. If you pass `--path`, the
+script installs to that path and does not compare it with the vault.
+
+Behaviour when a default local key exists:
+
+| Vault item | Result |
+|---|---|
+| Missing | Uploads the local key and creates the item |
+| Matches the local key | Reports the match and installs nothing |
+| Differs | Asks to `pull` the vault key, `push` the local key, or `skip` |
+
+For unattended runs, choose the conflict behaviour explicitly:
+
+```bash
+bash <(curl -fsSL .../install.sh) --on-mismatch pull
+bash <(curl -fsSL .../install.sh) --on-mismatch push
+```
+
+Comparison uses public keys and fingerprints only. Private keys are never
+printed, and an upload is piped to `bw` over stdin.
+
 ## Usage
 
 ```bash
@@ -108,11 +149,13 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
 |---|---|
 | `--host NAME` | Derive the item name from `NAME` instead of this hostname |
 | `--item NAME` | Use an exact vault item name |
-| `--path PATH` | Install the private key at `PATH` (default `~/.ssh/id_ed25519`) |
+| `--path PATH` | Install at `PATH` (default: first existing `id_*` key, else `~/.ssh/id_ed25519`) |
 | `--server URL` | Vault endpoint; skips the interactive prompt |
 | `--list` | List available `*-ssh-key` items and exit |
 | `--force` | Overwrite without confirmation (a timestamped backup is still made) |
 | `--no-create` | Do not create a vault item when the key is missing |
+| `--on-mismatch ACTION` | Local/vault conflict: `pull`, `push`, or `skip` (default: ask) |
+| `--no-reconcile` | Do not compare the local default key with the vault |
 | `--no-lock` | Leave the vault unlocked when the script exits |
 | `--dry-run` | Fetch or generate and validate the key, but do not create or install it |
 | `--check` | Check dependencies only |
@@ -154,6 +197,8 @@ curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh
   as the vault item is created, and never written to `/tmp`.
 - Key material is piped to `bw` over stdin, never passed as a command-line
   argument.
+- Local/vault comparison uses public key blobs and fingerprints. Private keys are
+  never printed, and uploads go to `bw` over stdin.
 - The master password is never passed on the command line; it is passed to `bw`
   through the environment and cleared on exit.
 - A 2FA code supplied via `BW_2FA_CODE` is passed with `--code`, so it is briefly

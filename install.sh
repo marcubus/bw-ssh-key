@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # bw-ssh-key: fetch a per-host private SSH key from Bitwarden/Vaultwarden
-# and install it at ~/.ssh/id_ed25519.
+# and install it at the OpenSSH default identity for this host.
 #
 # Usage:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh)
@@ -16,7 +16,29 @@ set -euo pipefail
 readonly SCRIPT_NAME="bw-ssh-key"
 readonly SCRIPT_VERSION="2026.11.0"
 readonly ITEM_SUFFIX="-ssh-key"
-readonly DEFAULT_KEY_PATH="${HOME}/.ssh/id_ed25519"
+readonly DEFAULT_KEY_DIR="${HOME}/.ssh"
+readonly DEFAULT_KEY_FALLBACK="${DEFAULT_KEY_DIR}/id_ed25519"
+readonly -a DEFAULT_KEY_NAMES=(id_rsa id_ecdsa id_ecdsa_sk id_ed25519 id_ed25519_sk id_dsa)
+
+resolve_default_key_path() {
+	local name
+	for name in "${DEFAULT_KEY_NAMES[@]}"; do
+		if [[ -f "${DEFAULT_KEY_DIR}/${name}" ]]; then
+			printf '%s' "${DEFAULT_KEY_DIR}/${name}"
+			return 0
+		fi
+	done
+	printf '%s' "$DEFAULT_KEY_FALLBACK"
+}
+
+is_default_key_path() { # path
+	local path=$1 name
+	[[ $(dirname "$path") == "$DEFAULT_KEY_DIR" ]] || return 1
+	for name in "${DEFAULT_KEY_NAMES[@]}"; do
+		[[ $(basename "$path") == "$name" ]] && return 0
+	done
+	return 1
+}
 
 readonly EX_OK=0
 readonly EX_FAIL=1
@@ -60,11 +82,15 @@ Usage:
 Options:
   --host NAME       Derive the item name from NAME instead of this hostname
   --item NAME       Use an exact vault item name
-  --path PATH       Install the private key at PATH (default: ~/.ssh/id_ed25519)
+  --path PATH       Install at PATH (default: first existing id_* key, else ~/.ssh/id_ed25519)
   --server URL      Vault endpoint (skips the interactive prompt)
   --list            List available *${ITEM_SUFFIX} items and exit
   --force           Overwrite without confirmation (a backup is still made)
   --no-create       Do not create a vault item when the key is missing
+  --on-mismatch ACTION
+                    Local key differs from the vault: pull, push, or skip
+                    (default: ask; applies only to the default key path)
+  --no-reconcile    Do not compare the local default key with the vault
   --no-lock         Leave the vault unlocked when the script exits
   --dry-run         Fetch or generate and validate the key, but do not create or install it
   --check           Check dependencies only, then exit
@@ -250,11 +276,14 @@ install_deps() {
 
 HOST_OVERRIDE=""
 ITEM_OVERRIDE=${VAULT_KEY_ITEM:-}
-KEY_PATH=$DEFAULT_KEY_PATH
+KEY_PATH=""
 SERVER_URL=""
 LIST_ONLY=0
 FORCE=0
 CREATE=1
+RECONCILE=1
+ON_MISMATCH=""
+SKIP_INSTALL=0
 LOCK_AFTER=1
 DRY_RUN=0
 CHECK_ONLY=0
@@ -291,6 +320,18 @@ parse_args() {
 			CREATE=0
 			shift
 			;;
+		--on-mismatch)
+			ON_MISMATCH=${2:?--on-mismatch requires a value}
+			case ${ON_MISMATCH,,} in
+			pull | p | push | u | upload | skip | s) ;;
+			*) die "invalid --on-mismatch value: $ON_MISMATCH" ;;
+			esac
+			shift 2
+			;;
+		--no-reconcile)
+			RECONCILE=0
+			shift
+			;;
 		--no-lock)
 			LOCK_AFTER=0
 			shift
@@ -318,6 +359,10 @@ parse_args() {
 		*) die "unknown option: $1 (try --help)" ;;
 		esac
 	done
+
+	if [[ -z $KEY_PATH ]]; then
+		KEY_PATH=$(resolve_default_key_path)
+	fi
 
 	# shellcheck disable=SC2088 # intentional literal-tilde match
 	case $KEY_PATH in
@@ -537,6 +582,7 @@ fetch_item() { # name
 	[[ -n $key ]] || return 1
 
 	KEY=$key
+	VAULT_PUB=$(jq -r '.sshKey.publicKey // empty' <<<"$json")
 	ITEM=$name
 	return 0
 }
@@ -549,6 +595,174 @@ list_ssh_items() {
 
 item_exists() { # name
 	bw get item "$1" >/dev/null 2>&1
+}
+
+pub_blob() { # public key line -> "type base64"
+	awk '{print $1" "$2}' <<<"$1"
+}
+
+fingerprint_of_pub() { # public key line
+	ssh-keygen -lf <(printf '%s\n' "$1") 2>/dev/null | awk '{print $2}'
+}
+
+derive_pub_from_private() { # private key string
+	local dir keyfile pub
+	dir=$(mktemp -d "${HOME}/.ssh/.bw-ssh-key.XXXXXX")
+	chmod 700 "$dir"
+	TMP_DIR=$dir
+	keyfile="${dir}/key"
+
+	(umask 077 && printf '%s\n' "$1" >"$keyfile")
+	pub=$(ssh-keygen -y -f "$keyfile" 2>/dev/null) || pub=""
+
+	rm -rf "$dir"
+	TMP_DIR=""
+	printf '%s' "$pub"
+}
+
+create_key_item_from_local() { # name
+	local name=$1
+	local dir pubfile private fingerprint json
+
+	dir=$(mktemp -d "${HOME}/.ssh/.bw-ssh-key.XXXXXX")
+	chmod 700 "$dir"
+	TMP_DIR=$dir
+	pubfile="${dir}/key.pub"
+
+	if ! ssh-keygen -y -f "$KEY_PATH" >"$pubfile" 2>/dev/null; then
+		die "cannot read local key $KEY_PATH (passphrase-protected?)"
+	fi
+
+	private=$(cat "$KEY_PATH")
+	fingerprint=$(ssh-keygen -lf "$pubfile" | awk '{print $2}')
+
+	json=$(jq -n \
+		--arg name "$name" \
+		--rawfile private "$KEY_PATH" \
+		--rawfile public "$pubfile" \
+		--arg fingerprint "$fingerprint" \
+		'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), fingerprint: $fingerprint}}')
+
+	if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
+		err "Hint: Vaultwarden needs EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent"
+		die "failed to create vault item '$name'"
+	fi
+
+	KEY=$private
+	ITEM=$name
+	SKIP_INSTALL=1
+
+	rm -rf "$dir"
+	TMP_DIR=""
+	info "Created vault item '$name' from the local key."
+}
+
+push_local_key() { # item
+	local name=$1
+	local item_json id dir pubfile fingerprint updated
+
+	item_json=$(bw get item "$name" 2>/dev/null) || die "could not read vault item '$name'"
+	id=$(jq -r '.id // empty' <<<"$item_json")
+	[[ -n $id ]] || die "vault item '$name' has no id"
+
+	dir=$(mktemp -d "${HOME}/.ssh/.bw-ssh-key.XXXXXX")
+	chmod 700 "$dir"
+	TMP_DIR=$dir
+	pubfile="${dir}/key.pub"
+
+	if ! ssh-keygen -y -f "$KEY_PATH" >"$pubfile" 2>/dev/null; then
+		die "cannot read local key $KEY_PATH (passphrase-protected?)"
+	fi
+	fingerprint=$(ssh-keygen -lf "$pubfile" | awk '{print $2}')
+
+	updated=$(jq \
+		--rawfile private "$KEY_PATH" \
+		--rawfile public "$pubfile" \
+		--arg fingerprint "$fingerprint" \
+		'.sshKey.privateKey = ($private | rtrimstr("\n"))
+		 | .sshKey.publicKey = ($public | rtrimstr("\n"))
+		 | .sshKey.fingerprint = $fingerprint' <<<"$item_json")
+
+	if ! printf '%s' "$updated" | bw encode | bw edit item "$id" >/dev/null; then
+		die "failed to update vault item '$name'"
+	fi
+
+	rm -rf "$dir"
+	TMP_DIR=""
+	info "Uploaded the local key to vault item '$name'."
+}
+
+reconcile_key() {
+	((RECONCILE)) || return 0
+	is_default_key_path "$KEY_PATH" || return 0
+	[[ -f $KEY_PATH ]] || return 0
+	[[ -n $KEY ]] || return 0
+
+	local local_pub vault_pub
+	local_pub=$(ssh-keygen -y -f "$KEY_PATH" 2>/dev/null) || local_pub=""
+	if [[ -z $local_pub ]]; then
+		warn "Cannot read $KEY_PATH (passphrase-protected?); skipping key comparison."
+		return 0
+	fi
+
+	vault_pub=${VAULT_PUB:-}
+	if [[ -z $vault_pub ]]; then
+		vault_pub=$(derive_pub_from_private "$KEY")
+	fi
+	if [[ -z $vault_pub ]]; then
+		warn "Could not derive the vault public key; skipping comparison."
+		return 0
+	fi
+
+	if [[ $(pub_blob "$local_pub") == "$(pub_blob "$vault_pub")" ]]; then
+		info "Local key matches vault item '$ITEM'."
+		SKIP_INSTALL=1
+		return 0
+	fi
+
+	warn "Local key and vault item '$ITEM' do not match."
+	info "  local fingerprint: $(fingerprint_of_pub "$local_pub")"
+	info "  vault fingerprint: $(fingerprint_of_pub "$vault_pub")"
+
+	local action=${ON_MISMATCH:-}
+	if [[ -z $action ]]; then
+		if ((DRY_RUN)); then
+			info "[dry-run] would ask to pull the vault key or push the local key."
+			return 0
+		fi
+		if ((! TTY_OPEN)); then
+			die "local and vault keys differ; pass --on-mismatch pull|push|skip"
+		fi
+		action=$(prompt "Keys differ: [p]ull vault key, [u]pload local key, [s]kip" "s") || die "aborted"
+	fi
+
+	case ${action,,} in
+	p | pull) action=pull ;;
+	u | upload | push) action=push ;;
+	s | skip) action=skip ;;
+	*) die "invalid --on-mismatch value: $action" ;;
+	esac
+
+	case $action in
+	pull)
+		if ((DRY_RUN)); then
+			info "[dry-run] would pull the vault key over the local key."
+		fi
+		return 0
+		;;
+	push)
+		if ((DRY_RUN)); then
+			info "[dry-run] would push the local key to the vault."
+			return 0
+		fi
+		push_local_key "$ITEM"
+		SKIP_INSTALL=1
+		;;
+	skip)
+		info "Skipped."
+		exit "$EX_OK"
+		;;
+	esac
 }
 
 create_key_item() { # name
@@ -599,6 +813,11 @@ find_item() {
 	if item_exists "$ITEM"; then
 		warn "Vault item '$ITEM' exists but has no usable private key."
 	elif ((CREATE)); then
+		if ((RECONCILE)) && is_default_key_path "$KEY_PATH" && [[ -f $KEY_PATH ]]; then
+			info "No vault item named '$ITEM'; uploading the existing local key."
+			create_key_item_from_local "$ITEM"
+			return 0
+		fi
 		info "No vault item named '$ITEM'; generating a new key for this host."
 		create_key_item "$ITEM"
 		return 0
@@ -790,6 +1009,20 @@ main() {
 	fi
 
 	find_item || die "no SSH key item found" "$EX_NOTFOUND"
+	reconcile_key
+
+	if ((SKIP_INSTALL)); then
+		local pubtmp="${KEY_PATH}.pub.tmp"
+		if ssh-keygen -y -f "$KEY_PATH" >"$pubtmp" 2>/dev/null; then
+			mv -f "$pubtmp" "${KEY_PATH}.pub"
+			chmod 644 "${KEY_PATH}.pub"
+		else
+			rm -f "$pubtmp"
+		fi
+		info "Local key already matches vault item '$ITEM'; nothing to install."
+		return 0
+	fi
+
 	install_key "$KEY" "$KEY_PATH"
 }
 

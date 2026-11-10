@@ -19,6 +19,8 @@ month and increments per release; tags are prefixed with `v`.
 - `--list`, `--host`, `--item`, `--path`, `--server`, `--force`, `--no-lock`,
   `--dry-run`, `--check`, and `--install-deps`.
 - `BW_2FA_CODE` and `BW_2FA_METHOD` for unattended two-step login.
+- Local/vault key reconciliation for OpenSSH default identities: pull, push, or
+  skip on mismatch, with `--on-mismatch` and `--no-reconcile`.
 - Dependency preflight with exit code `2` and per-tool install hints, including
   minimum versions for `jq` (1.6) and `bw` (2024.12.0).
 - CI for shellcheck, shfmt, smoke tests, and tag/version matching.
@@ -26,8 +28,10 @@ month and increments per release; tags are prefixed with `v`.
 
 ### Changed
 
-- Key installs target `~/.ssh/id_ed25519` and back up any existing key with a
-  timestamp.
+- Key installs target the first existing OpenSSH default identity
+  (`id_rsa`, `id_ecdsa`, `id_ecdsa_sk`, `id_ed25519`, `id_ed25519_sk`,
+  `id_dsa`), falling back to `~/.ssh/id_ed25519`, and back up any existing key
+  with a timestamp.
 - Generated keys are staged in a `700` directory under `~/.ssh` and removed
   immediately; nothing is written to `/tmp`.
 - Key material is piped to `bw` over stdin, never passed as an argument.
