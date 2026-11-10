@@ -10,7 +10,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/ins
 The script derives the vault item name from the machine:
 
 ```
-<hostname -s>-ssh-key      # maaate → maaate-ssh-key
+<hostname -s>-ssh-key      # workstation → workstation-ssh-key
 ```
 
 If that item does not exist, it lists every `*-ssh-key` item in the vault
@@ -64,7 +64,7 @@ it without prompting.
 bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh)
 
 # hostname does not match the vault naming
-bash <(curl -fsSL .../install.sh) --host maaate
+bash <(curl -fsSL .../install.sh) --host workstation
 
 # inspect what the vault has first
 bash <(curl -fsSL .../install.sh) --list

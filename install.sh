@@ -7,7 +7,7 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/marcubus/bw-ssh-key/main/install.sh)
 #
 # The vault item name is derived from the machine:
-#   <hostname -s>-ssh-key      e.g. maaate-ssh-key
+#   <hostname -s>-ssh-key      e.g. workstation-ssh-key
 #
 # See --help for flags.
 
