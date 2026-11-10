@@ -25,6 +25,11 @@ month and increments per release; tags are prefixed with `v`.
   minimum versions for `jq` (1.6) and `bw` (2024.12.0).
 - CI for shellcheck, shfmt, smoke tests, and tag/version matching.
 - `mise.lock` for reproducible tool installs, and Dependabot for GitHub Actions.
+- Pull request, release, bug report, and feature request templates, plus
+  categorized GitHub release notes.
+- Main and release-tag rulesets, with a direct-push exemption for the
+  maintainer.
+- SHA-pinned GitHub Actions and Dependabot security updates.
 
 ### Changed
 
@@ -36,6 +41,9 @@ month and increments per release; tags are prefixed with `v`.
   immediately; nothing is written to `/tmp`.
 - Key material is piped to `bw` over stdin, never passed as an argument.
 - Master password is passed with `--passwordenv`, not as a positional argument.
+- `main` now requires pull requests, the `check` CI job, and linear history;
+  squash and rebase merges are allowed.
+- GitHub Actions are pinned to commit SHAs and kept current by Dependabot.
 
 ### Fixed
 
