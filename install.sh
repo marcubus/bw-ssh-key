@@ -657,7 +657,7 @@ create_key_item_from_local() { # name
 		--rawfile private "$KEY_PATH" \
 		--rawfile public "$pubfile" \
 		--arg fingerprint "$fingerprint" \
-		'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), fingerprint: $fingerprint}}')
+		'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), keyFingerprint: $fingerprint}}')
 
 	if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
 		err "Hint: Vaultwarden needs EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent"
@@ -697,7 +697,7 @@ push_local_key() { # item
 		--arg fingerprint "$fingerprint" \
 		'.sshKey.privateKey = ($private | rtrimstr("\n"))
 		 | .sshKey.publicKey = ($public | rtrimstr("\n"))
-		 | .sshKey.fingerprint = $fingerprint' <<<"$item_json")
+		 | .sshKey.keyFingerprint = $fingerprint' <<<"$item_json")
 
 	if ! printf '%s' "$updated" | bw encode | bw edit item "$id" >/dev/null; then
 		die "failed to update vault item '$name'"
@@ -805,7 +805,7 @@ create_key_item() { # name
 			--rawfile private "$keyfile" \
 			--rawfile public "$keyfile.pub" \
 			--arg fingerprint "$fingerprint" \
-			'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), fingerprint: $fingerprint}}')
+			'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), keyFingerprint: $fingerprint}}')
 		if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
 			err "Hint: Vaultwarden needs EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent"
 			die "failed to create vault item '$name'"

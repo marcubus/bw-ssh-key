@@ -75,6 +75,25 @@ setup() {
 	[ ! -s "${BW_CREATE_FILE}" ]
 }
 
+@test "a missing item uploads the local key with keyFingerprint" {
+	set_vault_items
+	run "${INSTALL_SH}" --host new --server https://vault.example
+	[ "$status" -eq 0 ]
+	[ -s "${BW_CREATE_FILE}" ]
+	[[ "$(jq -r '.sshKey.keyFingerprint' "${BW_CREATE_FILE}")" == SHA256:* ]]
+	[ "$(jq -r '.sshKey.privateKey' "${BW_CREATE_FILE}")" = "$(cat "${LOCAL_KEY}")" ]
+}
+
+@test "a missing item with no local key generates a key with keyFingerprint" {
+	set_vault_items
+	rm -f "${LOCAL_KEY}" "${LOCAL_KEY}.pub"
+	run "${INSTALL_SH}" --host new --server https://vault.example
+	[ "$status" -eq 0 ]
+	[ -s "${BW_CREATE_FILE}" ]
+	[[ "$(jq -r '.sshKey.keyFingerprint' "${BW_CREATE_FILE}")" == SHA256:* ]]
+	[ "$(jq -r '.sshKey.privateKey' "${BW_CREATE_FILE}")" != "null" ]
+}
+
 @test "--force overwrites an existing key and makes a backup" {
 	set_vault_item "workstation-ssh-key" "${OTHER_KEY}"
 	run "${INSTALL_SH}" --host workstation --server https://vault.example \
@@ -158,6 +177,7 @@ setup() {
 		--on-mismatch push
 	[ "$status" -eq 0 ]
 	[ -s "${BW_EDIT_FILE}" ]
+	[[ "$(jq -r '.sshKey.keyFingerprint' "${BW_EDIT_FILE}")" == SHA256:* ]]
 	[ "$(jq -r '.sshKey.privateKey' "${BW_EDIT_FILE}")" = "$(cat "${LOCAL_KEY}")" ]
 }
 

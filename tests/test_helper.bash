@@ -43,7 +43,7 @@ vault_item_json() { # name key_path
 		--rawfile private "$key" \
 		--rawfile public "${key}.pub" \
 		--arg fingerprint "$(ssh-keygen -lf "${key}.pub" | awk '{print $2}')" \
-		'{id: ("item-" + $name), name: $name, type: 5, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), fingerprint: $fingerprint}}'
+		'{id: ("item-" + $name), name: $name, type: 5, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), keyFingerprint: $fingerprint}}'
 }
 
 set_vault_item() { # name key_path

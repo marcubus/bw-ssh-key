@@ -58,6 +58,8 @@ month and increments per release; tags are prefixed with `v`.
 - `--dry-run` no longer uploads an existing local key when the vault item is
   missing.
 - `--server` now strips a trailing slash before configuring the endpoint.
+- SSH key items now send `keyFingerprint`, which Vaultwarden requires, instead
+  of the unsupported `fingerprint` field.
 - `bw unlock` and `bw login` now read the password through `--passwordenv`,
   which the current CLI requires for non-interactive use.
 - Creating an item now hints at the Vaultwarden `ssh-key-vault-item` feature flag
