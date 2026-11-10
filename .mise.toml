@@ -1,0 +1,20 @@
+[tools]
+jq = "latest"
+shellcheck = "latest"
+shfmt = "latest"
+bitwarden = "latest"
+
+[tasks.lint]
+description = "Run shellcheck"
+run = "shellcheck -x install.sh"
+
+[tasks.fmt]
+description = "Format install.sh"
+run = "shfmt -w install.sh"
+
+[tasks.check]
+description = "Verify formatting and lint"
+run = [
+  "shfmt -d install.sh",
+  "shellcheck -x install.sh",
+]
