@@ -19,8 +19,10 @@ month and increments per release; tags are prefixed with `v`.
 - `--list`, `--host`, `--item`, `--path`, `--server`, `--force`, `--no-lock`,
   `--dry-run`, `--check`, and `--install-deps`.
 - `BW_2FA_CODE` and `BW_2FA_METHOD` for unattended two-step login.
-- Dependency preflight with exit code `2` and per-tool install hints.
+- Dependency preflight with exit code `2` and per-tool install hints, including
+  minimum versions for `jq` (1.6) and `bw` (2024.12.0).
 - CI for shellcheck, shfmt, smoke tests, and tag/version matching.
+- `mise.lock` for reproducible tool installs, and Dependabot for GitHub Actions.
 
 ### Changed
 
@@ -35,3 +37,5 @@ month and increments per release; tags are prefixed with `v`.
 
 - `bw unlock` and `bw login` now read the password through `--passwordenv`,
   which the current CLI requires for non-interactive use.
+- Creating an item now hints at the Vaultwarden `ssh-key-vault-item` feature flag
+  when the server rejects the item type.

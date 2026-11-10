@@ -155,6 +155,43 @@ collect_dep() { # command hint
 	command -v "$1" >/dev/null 2>&1 || MISSING+=("$1|$2")
 }
 
+version_ge() { # actual required
+	local -a actual required
+	IFS=. read -ra actual <<<"$1"
+	IFS=. read -ra required <<<"$2"
+
+	local i av bv
+	for ((i = 0; i < ${#required[@]}; i++)); do
+		av=${actual[i]:-0}
+		bv=${required[i]:-0}
+		if ((10#$av > 10#$bv)); then
+			return 0
+		fi
+		if ((10#$av < 10#$bv)); then
+			return 1
+		fi
+	done
+	return 0
+}
+
+check_jq_version() {
+	local v
+	v=$(jq --version 2>/dev/null) || return 0
+	v=${v#jq-}
+	version_ge "$v" "1.6" || MISSING+=("jq>=1.6|found jq $v; mise use -g jq@latest")
+}
+
+check_bw_version() {
+	local v=""
+	if command -v timeout >/dev/null 2>&1; then
+		v=$(timeout 5 bw --version 2>/dev/null | tail -n1) || v=""
+	else
+		v=$(bw --version 2>/dev/null | tail -n1) || v=""
+	fi
+	[[ -n $v ]] || return 0
+	version_ge "$v" "2024.12.0" || MISSING+=("bw>=2024.12.0|found bw $v; mise use -g bitwarden@latest")
+}
+
 preflight() {
 	MISSING=()
 	if ((BASH_VERSINFO[0] < 4)); then
@@ -165,6 +202,9 @@ preflight() {
 	collect_dep ssh-keygen "system package: openssh-client"
 	collect_dep hostname "system package: coreutils"
 	collect_dep mktemp "system package: coreutils"
+
+	command -v jq >/dev/null 2>&1 && check_jq_version
+	command -v bw >/dev/null 2>&1 && check_bw_version
 }
 
 report_missing() {
@@ -174,7 +214,7 @@ report_missing() {
 	for entry in "${MISSING[@]}"; do
 		cmd=${entry%%|*}
 		hint=${entry#*|}
-		printf '  %-12s %s\n' "$cmd" "$hint" >&2
+		printf '  %-16s %s\n' "$cmd" "$hint" >&2
 	done
 	err ""
 	err "Re-run with --install-deps to let mise install what it can."
@@ -537,6 +577,7 @@ create_key_item() { # name
 			--arg fingerprint "$fingerprint" \
 			'{type: 5, name: $name, notes: null, favorite: false, sshKey: {privateKey: ($private | rtrimstr("\n")), publicKey: ($public | rtrimstr("\n")), fingerprint: $fingerprint}}')
 		if ! printf '%s' "$json" | bw encode | bw create item >/dev/null; then
+			err "Hint: Vaultwarden needs EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent"
 			die "failed to create vault item '$name'"
 		fi
 		info "Created vault item '$name'"

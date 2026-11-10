@@ -31,18 +31,34 @@ lists every `*-ssh-key` item and asks which one to use.
 
 ## Requirements
 
-| Tool | Why | Install |
-|---|---|---|
-| `bash` 4+ | arrays, `mapfile` | system package |
-| `curl` | only for the one-liner; not used at runtime | system package |
-| `jq` | parse `bw` JSON | `mise use -g jq@latest` |
-| `bw` | Bitwarden CLI | `mise use -g bitwarden@latest` or `npm i -g @bitwarden/cli` |
-| `ssh-keygen` | validate key, derive public key | `openssh-client` |
+| Tool | Minimum | Why | Install |
+|---|---|---|---|
+| `bash` | 4.0 | arrays, `mapfile` | system package |
+| `jq` | 1.6 | `--rawfile` when creating items | `mise use -g jq@latest` |
+| `bw` | 2024.12.0 | SSH key items and `--passwordenv`; tested on 2026.10.1 | `mise use -g bitwarden@latest` or `npm i -g @bitwarden/cli` |
+| `ssh-keygen` | any OpenSSH | validate the key, derive the public key | `openssh-client` |
+| `hostname`, `mktemp`, `id`, `date` | coreutils | host detection and temp files | system package |
+| `awk` | POSIX | fingerprint parsing | system package |
+| `curl` | any | only for the one-liner; not used at runtime | system package |
+| `mise` | optional | `--install-deps` and development | `https://mise.run` |
 
-`--check` reports what is missing and exits `2`. `--install-deps` installs the
-mise-managed tools for you.
+`--check` reports missing tools and version mismatches, then exits `2`.
+`--install-deps` installs the mise-managed tools.
 
-This repo pins the same tools in `.mise.toml`; run `mise install` after cloning.
+### Vaultwarden
+
+SSH key items (type 5) require Vaultwarden to enable:
+
+```yaml
+EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item,ssh-agent
+```
+
+and a server version that supports the feature (around 1.32.5 or newer). Without
+it, creating a key item fails. The web vault may not display SSH key items even
+when the CLI can read and write them.
+
+This repo pins the same tools in `.mise.toml` and `mise.lock`; run `mise install`
+after cloning.
 
 ## Vault item format
 
@@ -75,6 +91,9 @@ bash <(curl -fsSL .../install.sh) --path ~/.ssh/deploy_key
 
 # check dependencies only
 bash <(curl -fsSL .../install.sh) --check
+
+# install missing mise-managed dependencies, then continue
+bash <(curl -fsSL .../install.sh) --install-deps
 ```
 
 Piping also works because every prompt is read from `/dev/tty`:
@@ -185,6 +204,7 @@ release notes.
 mise install
 mise run check     # shfmt -d + shellcheck
 mise run fmt       # shfmt -w
+mise lock --bump   # refresh mise.lock after changing .mise.toml
 ```
 
 CI runs the same checks on every push and pull request.
